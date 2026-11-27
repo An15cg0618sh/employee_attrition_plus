@@ -100,22 +100,6 @@ The supplied dataset is `data/employee_data.csv`. It contains 11,582 raw rows. E
 python -m streamlit run app.py
 ```
 
-## 18. Production Deployment
-
-See [DEPLOYMENT.md](./DEPLOYMENT.md) for Docker, Render, Streamlit Community Cloud, environment variables, health checks, persistence, security, and troubleshooting instructions.
-
-For a containerized local deployment:
-
-```powershell
-docker build -t workforce-insights:m2.7 .
-docker run --rm -p 8501:8501 workforce-insights:m2.7
-curl.exe -I http://localhost:8501/_stcore/health
-```
-
-Copy `.env.example` to `.env` for local overrides. Do not commit `.env` or Streamlit secrets. Monitoring persistence is local-filesystem based and requires external storage for durable hosted deployments.
-
-Production deployment is not a claim of a hosted deployment, fairness certification, or validation for consequential employment decisions.
-
 Open the local URL printed by Streamlit, normally `http://localhost:8501`.
 
 ## 10. Model Training Instructions
@@ -254,6 +238,28 @@ python -m ruff check src/ app.py tests/
 python -m py_compile app.py
 python -m streamlit run app.py
 ```
-#   e m p l o y e e _ a t t r i t i o n _ p l u s  
- #   e m p l o y e e _ a t t r i t i o n _ p l u s  
- 
+
+## 18. Project Documentation
+
+Canonical project knowledge is organized under [docs/](./docs/):
+
+- [PRD](./docs/PRD.md)
+- [Architecture](./docs/architecture.md)
+- [Design](./docs/design.md)
+- [Engineering memory](./docs/memory.md)
+- [Repository rules](./docs/rule.md)
+- [Task checklist](./docs/task.md)
+
+## 19. Production Deployment
+
+See [architecture and deployment documentation](./docs/architecture.md) for Docker, Render, Streamlit Community Cloud, environment variables, health checks, persistence, security, and troubleshooting instructions.
+
+For a containerized local deployment:
+
+```powershell
+docker build -t workforce-insights:m2.7 .
+docker run --rm -p 8501:8501 workforce-insights:m2.7
+curl.exe -I http://localhost:8501/_stcore/health
+```
+
+Copy `.env.example` to `.env` for local overrides. Do not commit `.env` or Streamlit secrets. Monitoring persistence is local-filesystem based and requires external storage for durable hosted deployments.
