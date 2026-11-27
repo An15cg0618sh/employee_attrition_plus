@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -22,7 +23,7 @@ from sklearn.metrics import (
 
 from src.attrition import EXPECTED_COLUMNS, TrainingResult, OptimizationResult
 
-MONITORING_DIR = Path("artifacts") / "monitoring"
+MONITORING_DIR = Path(os.getenv("MONITORING_DIR", "artifacts/monitoring"))
 REFERENCE_METADATA_FILENAME = "reference_metadata.json"
 MONITORING_HISTORY_FILENAME = "monitoring_history.json"
 
@@ -117,10 +118,7 @@ def ingest_monitoring_file(path: str | Path) -> pd.DataFrame:
         )
     try:
         if suffix == ".txt":
-            try:
-                data = pd.read_csv(target, sep=None, engine="python")
-            except Exception:
-                data = pd.read_csv(target)
+            data = pd.read_csv(target, sep=None, engine="python")
         else:
             data = pd.read_csv(target)
     except Exception as exc:
@@ -176,14 +174,10 @@ def validate_monitoring_data(
             if column not in monitoring_data:
                 continue
             known = set(summary.get("counts", {}).keys())
-            observed = set(monitoring_data[column].dropna().astype(str).unique())
+            known.discard("__MISSING__")
+            non_missing = monitoring_data[column].dropna().astype(str)
             unexpected_categories[column] = int(
-                monitoring_data[column].astype("object").where(
-                    monitoring_data[column].notna()
-                    & monitoring_data[column].astype(str).isin(known),
-                    np.nan,
-                ).isna().sum()
-                - monitoring_data[column].isna().sum()
+                sum(value not in known for value in non_missing)
             )
 
     quit_status = "absent"
@@ -191,8 +185,17 @@ def validate_monitoring_data(
     quit_note = "Ground truth absent."
     if "quit" in monitoring_data:
         quit_status = "present"
-        observed = set(monitoring_data["quit"].dropna().unique())
-        if observed and observed.issubset({0, 1}):
+        raw_quit = monitoring_data["quit"]
+        missing_count = int(raw_quit.isna().sum())
+        observed = set(raw_quit.dropna().unique())
+        invalid_labels = any(value not in {0, 1} for value in observed)
+        if invalid_labels:
+            quit_status = "invalid_labels"
+            quit_note = "quit contains invalid labels."
+        elif missing_count:
+            quit_status = "partial_binary"
+            quit_note = "quit contains missing labels and is not complete ground truth."
+        elif observed.issubset({0, 1}):
             quit_valid = True
             quit_status = "valid_binary"
             quit_note = "Valid binary ground truth is available."
@@ -387,11 +390,23 @@ def calculate_data_quality(
 
     duplicate_count = int(current_data.duplicated().sum())
     invalid_numeric = {}
+    numeric_columns = {
+        "satisfaction_level",
+        "last_evaluation",
+        "number_project",
+        "average_montly_hours",
+        "time_spend_company",
+        "Work_accident",
+        "promotion_last_5years",
+        "quit",
+    }
     out_of_range = {}
-    for column in current_data.columns:
-        if pd.api.types.is_numeric_dtype(current_data[column]):
-            invalid = pd.to_numeric(current_data[column], errors="coerce").isna().sum()
-            invalid_numeric[column] = int(invalid - current_data[column].isna().sum())
+    for column in numeric_columns.intersection(current_data.columns):
+        original = current_data[column]
+        coerced = pd.to_numeric(original, errors="coerce")
+        invalid = int(coerced.isna().sum() - original.isna().sum())
+        if invalid:
+            invalid_numeric[column] = invalid
     for column in {"satisfaction_level", "last_evaluation"}:
         if column in current_data:
             values = pd.to_numeric(current_data[column], errors="coerce")
@@ -635,7 +650,10 @@ def save_monitoring_history(
     path = target_dir / MONITORING_HISTORY_FILENAME
     deduplicated: dict[str, dict[str, Any]] = {}
     for report in history:
-        deduplicated[joblib.hash(report)] = report
+        signature = report.get("run_signature")
+        if not signature:
+            signature = build_monitoring_run_signature(report)
+        deduplicated[str(signature)] = report
     path.write_text(
         json.dumps([build_aggregate_export(v) for v in deduplicated.values()], indent=2),
         encoding="utf-8",

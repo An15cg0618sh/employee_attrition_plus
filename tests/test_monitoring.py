@@ -70,6 +70,17 @@ def test_monitoring_file_rejects_empty(tmp_path):
         ingest_monitoring_file(path)
 
 
+def test_txt_monitoring_file_is_parsed(tmp_path):
+    path = tmp_path / "batch.txt"
+    path.write_text(
+        "satisfaction_level;last_evaluation\n0.4;0.5\n0.6;0.7\n",
+        encoding="utf-8",
+    )
+    loaded = ingest_monitoring_file(path)
+    assert len(loaded) == 2
+    assert "satisfaction_level" in loaded.columns
+
+
 def test_numeric_psi_identical_and_shifted():
     identical = calculate_psi(np.arange(100), np.arange(100))
     shifted = calculate_psi(np.zeros(100), np.ones(100) * 10)
@@ -273,3 +284,48 @@ def test_zero_out_of_range_data_quality_is_healthy():
     quality = calculate_data_quality(reference, current)
     assert quality["status"] == "Healthy"
     assert quality["out_of_range"] == {}
+
+
+def test_partial_quit_labels_are_not_marked_valid_binary():
+    data = pd.DataFrame({
+        "quit": [0, None],
+        "satisfaction_level": [0.4, 0.5],
+    })
+    validation = validate_monitoring_data(data)
+    assert validation["quit_status"] == "partial_binary"
+    assert validation["quit_valid"] is False
+
+
+def test_invalid_quit_labels_are_not_valid_binary():
+    data = pd.DataFrame({
+        "quit": [0, 1, 2],
+    })
+    validation = validate_monitoring_data(data)
+    assert validation["quit_status"] == "invalid_labels"
+    assert validation["quit_valid"] is False
+
+
+def test_numeric_strings_are_reported_as_invalid_numeric_values():
+    reference = pd.DataFrame({
+        "satisfaction_level": [0.4, 0.5, 0.6],
+    })
+    current = pd.DataFrame({
+        "satisfaction_level": ["bad", "0.5", "0.6"],
+    })
+    quality = calculate_data_quality(reference, current)
+    assert quality["invalid_numeric"]["satisfaction_level"] == 1
+
+
+def test_history_deduplicates_by_run_signature(tmp_path):
+    first = {
+        "model_identity": "baseline:Random Forest",
+        "reference_fingerprint": "reference",
+        "monitoring_fingerprint": "batch",
+        "threshold": 0.5,
+        "status": {"status": "Critical"},
+    }
+    second = dict(first)
+    second["status"] = {"status": "Warning"}
+    save_monitoring_history([first, second], tmp_path)
+    history = load_monitoring_history(tmp_path)
+    assert len(history) == 1

@@ -51,7 +51,6 @@ src/analytics.py               Independent analytics helpers and tests retained 
 tests/                         Automated validation
 data/employee_data.csv         Supplied employee dataset
 artifacts/                     Saved model and training report
-notebooks/                     Original reference notebook
 ```
 
 `src/workforce_analytics.py` is the dashboard source of truth. `src/analytics.py` provides a parallel modular implementation that remains useful for independent testable analytics calculations; it is not removed because preserving Milestone 2.1/2.2 behavior is a release requirement.
@@ -73,7 +72,7 @@ python -m pip install -r requirements.txt
 python -m pip install -r requirements.txt
 ```
 
-Key dependencies are declared in `requirements.txt`: pandas, NumPy, scikit-learn, Streamlit, Matplotlib, Joblib, pytest, SHAP, and Plotly.
+Key dependencies are declared in `requirements.txt`: pandas, NumPy, scikit-learn, Streamlit, Matplotlib, Joblib, pytest, SHAP, Plotly, SciPy, and Requests.
 
 ## 8. Dataset Requirements
 
@@ -98,6 +97,18 @@ The supplied dataset is `data/employee_data.csv`. It contains 11,582 raw rows. E
 
 ```powershell
 python -m streamlit run app.py
+```
+
+Production-mode startup on Windows:
+
+```powershell
+$env:APP_ENV="production"
+$env:LOG_LEVEL="INFO"
+$env:DATA_PATH="data/employee_data.csv"
+$env:ARTIFACT_DIR="artifacts"
+$env:MONITORING_DIR="artifacts/monitoring"
+$env:ALLOW_ARTIFACT_WRITES="true"
+.\start_streamlit.ps1
 ```
 
 Open the local URL printed by Streamlit, normally `http://localhost:8501`.
@@ -238,6 +249,20 @@ python -m ruff check src/ app.py tests/
 python -m py_compile app.py
 python -m streamlit run app.py
 ```
-#   e m p l o y e e _ a t t r i t i o n _ p l u s  
- #   e m p l o y e e _ a t t r i t i o n _ p l u s  
- 
+
+## 18. Project Documentation
+
+Canonical project knowledge is organized under [docs/](./docs/):
+
+- [PRD](./docs/PRD.md)
+- [Architecture](./docs/architecture.md)
+- [Design](./docs/design.md)
+- [Engineering memory](./docs/memory.md)
+- [Repository rules](./docs/rule.md)
+- [Task checklist](./docs/task.md)
+
+## 19. Production Deployment
+
+See [architecture and deployment documentation](./docs/architecture.md) for local production-mode startup, environment variables, health checks, persistence, security, and troubleshooting instructions.
+
+Copy `.env.example` to `.env` for local overrides. Do not commit `.env` or Streamlit secrets.
