@@ -22,3 +22,10 @@
 - [ ] Review UI on narrow mobile and tablet layouts.
 - [ ] Continue the approved UI/UX professionalization workflow.
 - [ ] Add a formal deployment release checklist and rollback runbook.
+
+## Repository Cleanup Record
+
+- M2.1-M2.7 implementation knowledge is consolidated into this docs set.
+- Root milestone plans and QA reports are historical artifacts, not runtime inputs.
+- Browser evidence and synthetic monitoring files are release-validation evidence and should be regenerated or stored outside the source tree if needed later.
+- The original reference notebook is experimental source material and is not imported by runtime or tests.

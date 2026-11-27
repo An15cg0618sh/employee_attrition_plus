@@ -89,8 +89,7 @@ def test_dockerfile_does_not_require_untracked_artifacts():
 
 def test_python_and_deployment_handoff_files_exist():
     assert (ROOT / ".python-version").read_text(encoding="utf-8").strip() == "3.12"
-    assert (ROOT / "DEPLOYMENT.md").exists()
-    assert "Streamlit" in (ROOT / "DEPLOYMENT.md").read_text(encoding="utf-8")
+    assert "Deployment Handoff" in (ROOT / "docs" / "architecture.md").read_text(encoding="utf-8")
 
 
 def test_consolidated_documentation_files_exist():

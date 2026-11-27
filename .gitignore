@@ -14,3 +14,9 @@ env/
 *.log
 tmp/
 artifacts/
+build/
+dist/
+.coverage
+htmlcov/
+.ipynb_checkpoints/
+.vscode/

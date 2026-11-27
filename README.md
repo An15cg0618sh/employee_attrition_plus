@@ -51,7 +51,6 @@ src/analytics.py               Independent analytics helpers and tests retained 
 tests/                         Automated validation
 data/employee_data.csv         Supplied employee dataset
 artifacts/                     Saved model and training report
-notebooks/                     Original reference notebook
 ```
 
 `src/workforce_analytics.py` is the dashboard source of truth. `src/analytics.py` provides a parallel modular implementation that remains useful for independent testable analytics calculations; it is not removed because preserving Milestone 2.1/2.2 behavior is a release requirement.

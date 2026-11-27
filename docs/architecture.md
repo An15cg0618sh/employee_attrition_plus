@@ -45,7 +45,6 @@ src/
 tests/
 data/
 artifacts/
-reports/
 docs/
 .streamlit/
 Dockerfile
@@ -84,7 +83,7 @@ docker run --rm -p 8501:8501 workforce-insights:m2.7
 
 Render and Procfile examples are included at the repository root. Docker availability and a public provider deployment must be verified independently of local Streamlit startup.
 
-## Hosting Handoff
+## Deployment Handoff
 
 - GitHub: use as the source-control and provider trigger; never commit `.env` or secrets.
 - Streamlit Community Cloud: deploy `app.py` with `requirements.txt`; persistent monitoring storage is not guaranteed.
