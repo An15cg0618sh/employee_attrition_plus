@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -22,7 +23,7 @@ from sklearn.metrics import (
 
 from src.attrition import EXPECTED_COLUMNS, TrainingResult, OptimizationResult
 
-MONITORING_DIR = Path("artifacts") / "monitoring"
+MONITORING_DIR = Path(os.getenv("MONITORING_DIR", "artifacts/monitoring"))
 REFERENCE_METADATA_FILENAME = "reference_metadata.json"
 MONITORING_HISTORY_FILENAME = "monitoring_history.json"
 

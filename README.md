@@ -73,7 +73,7 @@ python -m pip install -r requirements.txt
 python -m pip install -r requirements.txt
 ```
 
-Key dependencies are declared in `requirements.txt`: pandas, NumPy, scikit-learn, Streamlit, Matplotlib, Joblib, pytest, SHAP, and Plotly.
+Key dependencies are declared in `requirements.txt`: pandas, NumPy, scikit-learn, Streamlit, Matplotlib, Joblib, pytest, SHAP, Plotly, SciPy, and Requests.
 
 ## 8. Dataset Requirements
 
@@ -99,6 +99,22 @@ The supplied dataset is `data/employee_data.csv`. It contains 11,582 raw rows. E
 ```powershell
 python -m streamlit run app.py
 ```
+
+## 18. Production Deployment
+
+See [DEPLOYMENT.md](./DEPLOYMENT.md) for Docker, Render, Streamlit Community Cloud, environment variables, health checks, persistence, security, and troubleshooting instructions.
+
+For a containerized local deployment:
+
+```powershell
+docker build -t workforce-insights:m2.7 .
+docker run --rm -p 8501:8501 workforce-insights:m2.7
+curl.exe -I http://localhost:8501/_stcore/health
+```
+
+Copy `.env.example` to `.env` for local overrides. Do not commit `.env` or Streamlit secrets. Monitoring persistence is local-filesystem based and requires external storage for durable hosted deployments.
+
+Production deployment is not a claim of a hosted deployment, fairness certification, or validation for consequential employment decisions.
 
 Open the local URL printed by Streamlit, normally `http://localhost:8501`.
 

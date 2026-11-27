@@ -1,6 +1,7 @@
 from pathlib import Path
 import base64
 import html
+import logging
 
 import joblib
 import matplotlib.pyplot as plt
@@ -62,8 +63,34 @@ from src.model_monitoring import (
     validate_monitoring_data,
 )
 from src.attrition import split_dataset
+from src.deployment import get_deployment_config
+
+try:
+    DEPLOYMENT_CONFIG = get_deployment_config()
+except ValueError as exc:
+    DEPLOYMENT_CONFIG = None
+    DEPLOYMENT_CONFIG_ERROR = str(exc)
+else:
+    DEPLOYMENT_CONFIG_ERROR = None
+
+logging.basicConfig(
+    level=getattr(logging, DEPLOYMENT_CONFIG["log_level"] if DEPLOYMENT_CONFIG else "INFO"),
+    format="%(asctime)s %(levelname)s %(name)s %(message)s",
+)
+LOGGER = logging.getLogger("workforce_insights")
 
 st.set_page_config(page_title="Workforce Insights | Attrition Lab", page_icon="📊", layout="wide")
+
+if DEPLOYMENT_CONFIG_ERROR:
+    st.error(f"Invalid deployment configuration: {DEPLOYMENT_CONFIG_ERROR}")
+    st.stop()
+
+if not DEPLOYMENT_CONFIG["data_path"].exists():
+    LOGGER.error("Configured data file not found: %s", DEPLOYMENT_CONFIG["data_path"])
+    st.error(
+        f"Configured dataset is unavailable: {DEPLOYMENT_CONFIG['data_path']}"
+    )
+    st.stop()
 
 @st.cache_data(show_spinner=False)
 def cached_training(dataframe):
@@ -102,7 +129,7 @@ st.warning(
     "questions, with human review and appropriate privacy safeguards."
 )
 
-DEFAULT_DATA = Path("data/employee_data.csv")
+DEFAULT_DATA = DEPLOYMENT_CONFIG["data_path"]
 uploaded = st.sidebar.file_uploader("Upload an employee CSV", type=["csv"])
 try:
     if uploaded is not None:
@@ -129,7 +156,9 @@ if st.session_state.get("m25_data_fingerprint") != data_fingerprint:
     st.session_state["m26_monitoring_report"] = None
     st.session_state["m26_monitoring_status"] = ""
     try:
-        st.session_state["m26_monitoring_history"] = load_monitoring_history()
+        st.session_state["m26_monitoring_history"] = load_monitoring_history(
+            artifact_dir=DEPLOYMENT_CONFIG["monitoring_dir"],
+        )
     except Exception:
         st.session_state["m26_monitoring_history"] = []
 
@@ -280,6 +309,10 @@ if run_optimization:
                     {name: results[name] for name in optimized_results},
                     optimized_results,
                 )
+                if not DEPLOYMENT_CONFIG["allow_artifact_writes"]:
+                    raise RuntimeError(
+                        "Artifact writes are disabled by ALLOW_ARTIFACT_WRITES=false."
+                    )
                 best_optimized_name = max(
                     optimized_results,
                     key=lambda name: optimized_results[name].best_cv_score,
@@ -287,6 +320,7 @@ if run_optimization:
                 model_path, report_path = save_optimized_model(
                     optimized_results[best_optimized_name],
                     cleaning_report,
+                    artifact_dir=DEPLOYMENT_CONFIG["artifact_dir"],
                 )
                 st.session_state["m25_optimization_results"] = optimized_results
                 st.session_state["m25_optimization_failures"] = optimization_failures
@@ -522,6 +556,10 @@ if run_monitoring:
         )
     else:
         try:
+            if not DEPLOYMENT_CONFIG["allow_artifact_writes"]:
+                raise RuntimeError(
+                    "Artifact writes are disabled by ALLOW_ARTIFACT_WRITES=false."
+                )
             suffix = Path(monitoring_upload.name).suffix.lower()
             if suffix not in {".csv", ".txt"}:
                 raise ValueError("Monitoring supports CSV and TXT files only.")
@@ -588,8 +626,14 @@ if run_monitoring:
                 monitoring_report
             )
 
-            save_reference_metadata(reference_metadata)
-            report_path = save_monitoring_report(monitoring_report)
+            save_reference_metadata(
+                reference_metadata,
+                artifact_dir=DEPLOYMENT_CONFIG["monitoring_dir"],
+            )
+            report_path = save_monitoring_report(
+                monitoring_report,
+                artifact_dir=DEPLOYMENT_CONFIG["monitoring_dir"],
+            )
             history = st.session_state.get("m26_monitoring_history", []).copy()
             signature = monitoring_report["run_signature"]
             if not any(
@@ -601,7 +645,10 @@ if run_monitoring:
                 for row in history
             ):
                 history.append(monitoring_report)
-            save_monitoring_history(history)
+            save_monitoring_history(
+                history,
+                artifact_dir=DEPLOYMENT_CONFIG["monitoring_dir"],
+            )
             st.session_state["m26_monitoring_history"] = history[-20:]
             st.session_state["m26_monitoring_report"] = monitoring_report
             st.session_state["m26_monitoring_status"] = (

@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: workforce-insights
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /_stcore/health
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: LOG_LEVEL
+        value: INFO
+      - key: DATA_PATH
+        value: /app/data/employee_data.csv
+      - key: ARTIFACT_DIR
+        value: /app/artifacts
+      - key: MONITORING_DIR
+        value: /app/artifacts/monitoring
+      - key: ALLOW_ARTIFACT_WRITES
+        value: true
