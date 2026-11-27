@@ -123,6 +123,26 @@ def test_baseline_vs_optimized_comparison_deltas(small_dataset):
     with pytest.raises(ValueError, match="Test split mismatch"):
         compare_baseline_and_optimized(base_results, opt_results)
 
+    opt_results["Logistic Regression"].X_test = base_results["Logistic Regression"].X_test.copy()
+    opt_results["Logistic Regression"].y_test = opt_results["Logistic Regression"].y_test.copy()
+    opt_results["Logistic Regression"].y_test.iloc[0] = 1 - opt_results["Logistic Regression"].y_test.iloc[0]
+    with pytest.raises(ValueError, match="Test split mismatch"):
+        compare_baseline_and_optimized(base_results, opt_results)
+
+
+def test_dashboard_optimization_ui_state_and_cache_contract():
+    app_path = Path(__file__).parents[1] / "app.py"
+    app_text = app_path.read_text(encoding="utf-8")
+
+    assert 'with st.form("m25_optimization_form"):' in app_text
+    assert 'run_optimization = st.form_submit_button("Run bounded optimization")' in app_text
+    assert 'if run_optimization:' in app_text
+    assert 'm25_optimization_results' in app_text
+    assert 'm25_optimization_comparison' in app_text
+    assert 'm25_optimization_failures' in app_text
+    assert 'def cached_global_shap(model_cache_key, _pipeline, dataframe' in app_text
+    assert 'f"optimized:{data_fingerprint}:' in app_text
+
 
 def test_save_and_load_optimized_model_isolated_from_baseline(small_dataset, tmp_path):
     opt_results, comp, cleaning_report, _ = optimize_models(

@@ -4,7 +4,6 @@ import html
 
 import joblib
 import matplotlib.pyplot as plt
-import numpy as np
 import pandas as pd
 import plotly.express as px
 import streamlit as st
@@ -46,6 +45,23 @@ from src.workforce_analytics import (
     salary_attrition,
     tenure_attrition,
 )
+from src.model_monitoring import (
+    build_feature_drift_csv,
+    build_monitoring_run_signature,
+    calculate_categorical_drift_by_feature,
+    calculate_data_quality,
+    calculate_delayed_performance,
+    calculate_numerical_drift,
+    calculate_prediction_drift,
+    create_reference_metadata,
+    evaluate_monitoring_status,
+    load_monitoring_history,
+    save_monitoring_history,
+    save_monitoring_report,
+    save_reference_metadata,
+    validate_monitoring_data,
+)
+from src.attrition import split_dataset
 
 st.set_page_config(page_title="Workforce Insights | Attrition Lab", page_icon="📊", layout="wide")
 
@@ -110,6 +126,12 @@ if st.session_state.get("m25_data_fingerprint") != data_fingerprint:
     st.session_state["m25_optimization_status"] = ""
     st.session_state["m25_optimized_artifacts"] = {}
     st.session_state["m25_optimization_run_version"] = 0
+    st.session_state["m26_monitoring_report"] = None
+    st.session_state["m26_monitoring_status"] = ""
+    try:
+        st.session_state["m26_monitoring_history"] = load_monitoring_history()
+    except Exception:
+        st.session_state["m26_monitoring_history"] = []
 
 # Sidebar filters affect only the aggregate workforce analytics section.
 st.sidebar.divider()
@@ -269,6 +291,10 @@ if run_optimization:
                 st.session_state["m25_optimization_results"] = optimized_results
                 st.session_state["m25_optimization_failures"] = optimization_failures
                 st.session_state["m25_optimization_comparison"] = optimized_comparison
+                st.session_state["m25_optimization_cleaning_report"] = cleaning_report
+                st.session_state["m25_optimization_run_id"] = (
+                    st.session_state.get("m25_optimization_run_id", 0) + 1
+                )
                 st.session_state["m25_optimized_artifacts"] = {
                     "model": str(model_path),
                     "report": str(report_path),
@@ -334,7 +360,7 @@ if optimized_results and not optimized_comparison.empty:
         display_row["CV F1 std · baseline"] = comparison_row["baseline_cv_f1_std"]
         display_row["CV F1 std · optimized"] = comparison_row["optimized_cv_f1_std"]
         display_row["Baseline train seconds"] = comparison_row["baseline_train_time_sec"]
-        display_row["Optimization seconds"] = comparison_row["optimized_optimization_time_sec"]
+        display_row["Optimization + refit seconds"] = comparison_row["optimized_optimization_time_sec"]
         display_row["Baseline prediction seconds"] = comparison_row["baseline_predict_time_sec"]
         display_row["Optimized prediction seconds"] = comparison_row["optimized_predict_time_sec"]
         comparison_rows.append(display_row)
@@ -439,6 +465,247 @@ else:
         "No optimized results are available for this dataset yet. Submit the form "
         "above to run optimization; dashboard reruns do not launch it automatically."
     )
+
+# ---------------------------------------------------------------------------
+# Milestone 2.6: User-triggered model monitoring and data drift
+# ---------------------------------------------------------------------------
+st.divider()
+st.header("Model Monitoring & Data Drift")
+st.info(
+    "Monitoring is educational and uses aggregate statistics only. "
+    "Drift does not prove bias, reduced model accuracy, or causation."
+)
+
+monitoring_upload = st.file_uploader(
+    "Upload a current monitoring batch (CSV or TXT)",
+    type=["csv", "txt"],
+    key="m26_monitoring_file",
+)
+
+available_monitoring_models = list(results.keys())
+monitoring_model_name = st.selectbox(
+    "Monitoring model",
+    available_monitoring_models,
+    index=available_monitoring_models.index(best_name),
+    key="m26_monitoring_model_name",
+)
+monitoring_versions = ["Baseline"]
+if monitoring_model_name in optimized_results:
+    monitoring_versions.append("Optimized")
+monitoring_version = st.selectbox(
+    "Monitoring model version",
+    monitoring_versions,
+    key=f"m26_monitoring_version_{monitoring_model_name.replace(' ', '_')}",
+)
+monitoring_selected = (
+    optimized_results[monitoring_model_name]
+    if monitoring_version == "Optimized"
+    else results[monitoring_model_name]
+)
+
+monitoring_threshold = st.slider(
+    "Prediction positive threshold",
+    min_value=0.10,
+    max_value=0.90,
+    value=0.50,
+    step=0.05,
+    key="m26_monitoring_threshold",
+)
+
+with st.form("m26_monitoring_form"):
+    run_monitoring = st.form_submit_button("Run monitoring for uploaded batch")
+
+if run_monitoring:
+    if monitoring_upload is None:
+        st.session_state["m26_monitoring_status"] = (
+            "Monitoring was not run: upload a CSV or TXT batch first."
+        )
+    else:
+        try:
+            suffix = Path(monitoring_upload.name).suffix.lower()
+            if suffix not in {".csv", ".txt"}:
+                raise ValueError("Monitoring supports CSV and TXT files only.")
+            monitoring_data = pd.read_csv(monitoring_upload)
+            if monitoring_data.empty:
+                raise ValueError("Monitoring data contains no rows.")
+
+            X_train, _, _, _, _ = split_dataset(data, random_state=42)
+            reference_metadata = create_reference_metadata(X_train)
+            validation = validate_monitoring_data(
+                monitoring_data,
+                reference_metadata,
+            )
+
+            numerical_drift = calculate_numerical_drift(
+                X_train,
+                monitoring_data,
+                alpha=0.05,
+            )
+            categorical_drift = calculate_categorical_drift_by_feature(
+                X_train,
+                monitoring_data,
+            )
+            data_quality = calculate_data_quality(
+                X_train,
+                monitoring_data,
+            )
+            prediction_drift = calculate_prediction_drift(
+                monitoring_selected,
+                monitoring_data,
+                threshold=monitoring_threshold,
+            )
+            performance = calculate_delayed_performance(
+                monitoring_selected,
+                monitoring_data,
+                threshold=monitoring_threshold,
+            )
+            status_report = evaluate_monitoring_status(
+                data_quality=data_quality,
+                numerical_drift=numerical_drift,
+                categorical_drift=categorical_drift,
+                prediction_drift=prediction_drift,
+                performance=performance,
+            )
+
+            monitoring_report = {
+                "model": monitoring_model_name,
+                "model_version": monitoring_version,
+                "model_identity": (
+                    f"{monitoring_version.lower()}:{monitoring_model_name}"
+                ),
+                "threshold": monitoring_threshold,
+                "reference_fingerprint": reference_metadata["fingerprint"],
+                "monitoring_fingerprint": joblib.hash(monitoring_data),
+                "validation": validation,
+                "data_quality": data_quality,
+                "numerical_drift": numerical_drift,
+                "categorical_drift": categorical_drift,
+                "prediction_distribution": prediction_drift,
+                "delayed_performance": performance,
+                "status": status_report,
+            }
+            monitoring_report["run_signature"] = build_monitoring_run_signature(
+                monitoring_report
+            )
+
+            save_reference_metadata(reference_metadata)
+            report_path = save_monitoring_report(monitoring_report)
+            history = st.session_state.get("m26_monitoring_history", []).copy()
+            signature = monitoring_report["run_signature"]
+            if not any(
+                row.get("run_signature") == signature
+                or (
+                    "run_signature" not in row
+                    and build_monitoring_run_signature(row) == signature
+                )
+                for row in history
+            ):
+                history.append(monitoring_report)
+            save_monitoring_history(history)
+            st.session_state["m26_monitoring_history"] = history[-20:]
+            st.session_state["m26_monitoring_report"] = monitoring_report
+            st.session_state["m26_monitoring_status"] = (
+                f"Monitoring completed. Aggregate report saved to `{report_path}`."
+            )
+        except Exception as exc:
+            st.session_state["m26_monitoring_status"] = (
+                f"Monitoring failed: {exc}"
+            )
+
+monitoring_status = st.session_state.get("m26_monitoring_status", "")
+if monitoring_status:
+    if monitoring_status.startswith("Monitoring failed") or "not run" in monitoring_status:
+        st.warning(monitoring_status)
+    else:
+        st.success(monitoring_status)
+
+monitoring_report = st.session_state.get("m26_monitoring_report")
+if monitoring_report:
+    status_value = monitoring_report["status"]["status"]
+    st.subheader(f"Monitoring status: {status_value}")
+    for reason in monitoring_report["status"]["reasons"]:
+        st.write(f"- {reason}")
+
+    quality = monitoring_report["data_quality"]
+    q1, q2, q3 = st.columns(3)
+    q1.metric("Rows monitored", monitoring_report["validation"]["row_count"])
+    q2.metric("Duplicate rows", quality["duplicate_count"])
+    q3.metric("Data-quality status", quality["status"])
+
+    numerical_rows = []
+    for feature, summary in monitoring_report["numerical_drift"].items():
+        numerical_rows.append({"Feature": feature, **summary})
+    if numerical_rows:
+        st.subheader("Numerical drift")
+        st.dataframe(
+            pd.DataFrame(numerical_rows).style.format(
+                {"psi": "{:.4f}", "ks_statistic": "{:.4f}", "ks_p_value": "{:.4f}"}
+            ),
+            width="stretch",
+            hide_index=True,
+        )
+
+    categorical_rows = []
+    for feature, summary in monitoring_report["categorical_drift"].items():
+        categorical_rows.append({
+            "Feature": feature,
+            "Maximum proportion shift": summary["max_proportion_shift"],
+            "Unseen categories": ", ".join(summary["unseen_categories"]) or "None",
+            "Disappeared categories": ", ".join(summary["disappeared_categories"]) or "None",
+        })
+    if categorical_rows:
+        st.subheader("Categorical drift")
+        st.dataframe(categorical_rows, width="stretch", hide_index=True)
+
+    st.subheader("Prediction distribution")
+    prediction = monitoring_report["prediction_distribution"]
+    p1, p2, p3 = st.columns(3)
+    p1.metric("Mean prediction", f"{prediction['mean']:.3f}")
+    p2.metric("Median prediction", f"{prediction['median']:.3f}")
+    p3.metric("Predicted-positive rate", f"{prediction['predicted_positive_rate']:.1%}")
+
+    performance = monitoring_report["delayed_performance"]
+    st.subheader("Delayed ground-truth performance")
+    if performance["status"] == "Available":
+        st.dataframe(
+            pd.DataFrame([performance["metrics"]]).style.format("{:.3f}"),
+            width="stretch",
+            hide_index=True,
+        )
+    else:
+        st.info(
+            "Model performance cannot be verified until valid binary "
+            "ground-truth outcomes are available."
+        )
+
+    drift_payload = build_feature_drift_csv(
+        monitoring_report["numerical_drift"],
+        monitoring_report["categorical_drift"],
+    )
+    drift_b64 = base64.b64encode(drift_payload).decode("ascii")
+    st.markdown(
+        f'<a href="data:text/csv;base64,{drift_b64}" '
+        'download="monitoring_feature_drift.csv" '
+        'style="display:inline-block;padding:0.4rem 0.75rem;'
+        'border:1px solid rgba(49,51,63,0.2);border-radius:0.25rem;">'
+        "Download aggregate feature drift CSV</a>",
+        unsafe_allow_html=True,
+    )
+
+    monitoring_history = st.session_state.get("m26_monitoring_history", [])
+    if monitoring_history:
+        with st.expander("Monitoring history"):
+            history_rows = [
+                {
+                    "Model": row.get("model"),
+                    "Version": row.get("model_version"),
+                    "Threshold": row.get("threshold"),
+                    "Status": row.get("status", {}).get("status"),
+                    "Monitoring fingerprint": row.get("monitoring_fingerprint"),
+                }
+                for row in monitoring_history[-20:]
+            ]
+            st.dataframe(history_rows, width="stretch", hide_index=True)
 
 # ---------------------------------------------------------------------------
 # Workforce Analytics
