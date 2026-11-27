@@ -106,7 +106,9 @@ git:
   log_top: "1bb7435 Update Milestone 2.6 files"
   tag_name: "m2.6-release-checkpoint"
   tag_status: "created"
-  intended_tag_target: "1bb7435553129173e8e42b4416a02873dbae3736"
+  implementation_commit: "1bb7435553129173e8e42b4416a02873dbae3736"
+  evidence_commit: "62bebe7"
+  intended_tag_target: "62bebe7"
   duplicated_checkpoint_commit: "NOT_CREATED"
   duplicate_reason: "HEAD is already an equivalent M2.6 implementation checkpoint."
 
