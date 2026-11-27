@@ -38,7 +38,7 @@ Organizations need to understand aggregate workforce patterns and model behaviou
 - M2.4: Production-safe exports and final baseline behavior.
 - M2.5: Hyperparameter optimization, persistence, comparison, and version selection.
 - M2.6: Monitoring, drift detection, status engine, and aggregate reporting.
-- M2.7: Deployment configuration, Docker/hosting guidance, environment validation, health, and documentation.
+- M2.7: Deployment configuration, environment validation, health, and documentation.
 
 ## Non-goals
 

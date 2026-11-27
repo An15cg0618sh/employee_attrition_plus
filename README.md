@@ -263,14 +263,6 @@ Canonical project knowledge is organized under [docs/](./docs/):
 
 ## 19. Production Deployment
 
-See [architecture and deployment documentation](./docs/architecture.md) for Docker, Render, Streamlit Community Cloud, environment variables, health checks, persistence, security, and troubleshooting instructions.
+See [architecture and deployment documentation](./docs/architecture.md) for local production-mode startup, environment variables, health checks, persistence, security, and troubleshooting instructions.
 
-For a containerized local deployment:
-
-```powershell
-docker build -t workforce-insights:m2.7 .
-docker run --rm -p 8501:8501 workforce-insights:m2.7
-curl.exe -I http://localhost:8501/_stcore/health
-```
-
-Copy `.env.example` to `.env` for local overrides. Do not commit `.env` or Streamlit secrets. Monitoring persistence is local-filesystem based and requires external storage for durable hosted deployments.
+Copy `.env.example` to `.env` for local overrides. Do not commit `.env` or Streamlit secrets.

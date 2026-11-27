@@ -32,8 +32,6 @@
 - Review staged diffs before commit.
 - Verify baseline artifact hashes.
 - Run pytest, Ruff, compilation, pip/dependency checks, and Streamlit health before release.
-- Record Docker/public-host verification separately from local startup.
-- Do not claim a hosted deployment without provider evidence.
 
 ## AI/Agent Operating Rules
 

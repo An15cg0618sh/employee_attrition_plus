@@ -54,9 +54,8 @@ def test_env_example_contains_no_real_credentials():
 
 def test_production_startup_configs_exist():
     assert (ROOT / ".streamlit" / "config.toml").exists()
-    assert (ROOT / "Dockerfile").exists()
-    assert (ROOT / "render.yaml").exists()
-    assert (ROOT / "Procfile").exists()
+    assert (ROOT / "start_streamlit.ps1").exists()
+    assert (ROOT / "start_streamlit.sh").exists()
 
 
 def test_app_uses_deployment_config_and_structured_logging():
@@ -79,12 +78,6 @@ def test_requirements_include_runtime_drift_dependencies():
     assert "requests>=2.32.2" in requirements
 
 
-def test_dockerfile_does_not_require_untracked_artifacts():
-    dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
-    assert "COPY artifacts" not in dockerfile
-    assert "streamlit" in dockerfile
-    assert "run" in dockerfile
-    assert "app.py" in dockerfile
 
 
 def test_python_and_deployment_handoff_files_exist():
