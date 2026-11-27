@@ -29,3 +29,9 @@
 - Invalid or partial `quit` labels do not produce delayed performance metrics.
 - Hosted ephemeral storage may lose monitoring history.
 - Uploaded data is runtime-only and must not be treated as durable storage.
+
+## Reference Notebook
+
+- `notebooks/original_reference.ipynb` is retained as historical exploratory source material.
+- It is not imported by application, training, or test code.
+- Executable analytics behavior is implemented and tested in `src/analytics.py` and the other `src/` modules.
