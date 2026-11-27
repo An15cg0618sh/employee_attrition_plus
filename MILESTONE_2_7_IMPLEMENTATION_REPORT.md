@@ -31,3 +31,9 @@ The implementation does not modify model training logic, SHAP behavior, workforc
 Exact commands and final results are recorded in `QA_REPORT_MILESTONE_2_7_FINAL.md`.
 
 Hosted deployment remains an operational follow-up: a successful local/container startup does not prove deployment to a public hosting provider.
+
+## 5. Git
+
+- Branch: `milestone/2.7-production`
+- Implementation commit: `d224359`
+- M2.6 release tag remains `m2.6-release-checkpoint`.

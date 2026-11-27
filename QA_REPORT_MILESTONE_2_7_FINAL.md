@@ -50,3 +50,12 @@ Deployment setup did not retrain or overwrite model artifacts.
 - Docker build/run was not executable in this environment.
 - Public hosting/provider deployment was not performed.
 - Monitoring persistence uses local filesystem storage and requires external storage for durable hosted deployments.
+
+## Git and Release Readiness
+
+- Branch: `milestone/2.7-production`
+- M2.7 implementation commit: `d224359`
+- M2.6 tag: `m2.6-release-checkpoint`
+- M2.6 evidence commit: `62bebe70a146e702abf3e210a64251c8032251df`
+- Working tree: clean after the M2.7 commit.
+- Final verdict: **Local production-readiness implementation complete; hosted deployment remains an operational release step.**
