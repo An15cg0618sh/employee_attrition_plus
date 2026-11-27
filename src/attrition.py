@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 import json
+import logging
 from pathlib import Path
 import time
 from typing import Any
@@ -37,6 +38,7 @@ EXPECTED_COLUMNS = {
 }
 OPTIMIZED_MODEL_FILENAME = "optimized_best_model.joblib"
 OPTIMIZED_REPORT_FILENAME = "optimized_training_report.json"
+LOGGER = logging.getLogger("employee_attrition.attrition")
 
 
 @dataclass
@@ -211,6 +213,7 @@ def train_and_compare(
     results: dict[str, TrainingResult] = {}
     rows = []
     models = candidate_models if candidate_models is not None else get_candidate_models()
+    failed_models: dict[str, str] = {}
 
     for name, model in models.items():
         try:
@@ -239,6 +242,8 @@ def train_and_compare(
                 "cv_roc_auc_mean": float(np.nanmean(cv_result["test_roc_auc"])),
             }
             if not _has_valid_metrics(metrics) or not _has_valid_metrics(cv_metrics):
+                failed_models[name] = "Candidate produced non-finite metrics."
+                LOGGER.error("Baseline candidate %s produced non-finite metrics.", name)
                 continue
 
             results[name] = TrainingResult(
@@ -253,11 +258,16 @@ def train_and_compare(
                 "train_time_sec": train_time_sec,
                 "predict_time_sec": predict_time_sec,
             })
-        except Exception:
+        except Exception as exc:
+            failed_models[name] = str(exc)
+            LOGGER.exception("Baseline candidate %s failed: %s", name, exc)
             continue
 
     if not results:
-        raise RuntimeError("All candidate models failed during baseline training and evaluation.")
+        raise RuntimeError(
+            f"All candidate models failed during baseline training and evaluation: "
+            f"{failed_models}"
+        )
 
     comparison = (
         pd.DataFrame(rows)

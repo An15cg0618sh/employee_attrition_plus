@@ -188,8 +188,13 @@ if st.session_state.get("m25_data_fingerprint") != data_fingerprint:
         st.session_state["m26_monitoring_history"] = load_monitoring_history(
             artifact_dir=DEPLOYMENT_CONFIG["monitoring_dir"],
         )
-    except Exception:
+    except (FileNotFoundError, RuntimeError) as exc:
         st.session_state["m26_monitoring_history"] = []
+        LOGGER.warning("Could not restore monitoring history: %s", exc)
+        st.warning(
+            "Saved monitoring history could not be restored. "
+            "A valid new run may create a new history file."
+        )
 
 # Sidebar filters affect only the aggregate workforce analytics section.
 with st.sidebar:
@@ -1339,7 +1344,14 @@ if show_monitoring:
                 suffix = Path(monitoring_upload.name).suffix.lower()
                 if suffix not in {".csv", ".txt"}:
                     raise ValueError("Monitoring supports CSV and TXT files only.")
-                monitoring_data = pd.read_csv(monitoring_upload)
+                if suffix == ".txt":
+                    monitoring_data = pd.read_csv(
+                        monitoring_upload,
+                        sep=None,
+                        engine="python",
+                    )
+                else:
+                    monitoring_data = pd.read_csv(monitoring_upload)
                 if monitoring_data.empty:
                     raise ValueError("Monitoring data contains no rows.")
 
