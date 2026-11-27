@@ -1,0 +1,1 @@
+Before publishing a derivative of the upstream notebook or dataset, inspect the upstream repository's current LICENSE and the dataset's provenance. Do not assume that a public GitHub repository automatically grants permission to redistribute every included dataset or asset.
