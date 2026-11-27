@@ -49,6 +49,7 @@ def test_shared_deterministic_split_and_no_overlap(small_dataset):
         assert base_results[name].X_test.equals(opt_results[name].X_test)
         assert base_results[name].train_time_sec >= 0.0
         assert base_results[name].predict_time_sec >= 0.0
+        assert 0.0 <= opt_results[name].cv_metrics["cv_roc_auc_mean"] <= 1.0
 
 
 def test_optimization_reproducibility_with_fixed_seed(small_dataset):
@@ -58,6 +59,9 @@ def test_optimization_reproducibility_with_fixed_seed(small_dataset):
     for name in res1:
         assert res1[name].best_params == res2[name].best_params
         assert pytest.approx(res1[name].best_cv_score, abs=1e-12) == res2[name].best_cv_score
+        assert pytest.approx(
+            res1[name].cv_metrics["cv_roc_auc_mean"], abs=1e-12
+        ) == res2[name].cv_metrics["cv_roc_auc_mean"]
         np.testing.assert_allclose(res1[name].probabilities, res2[name].probabilities, atol=1e-12)
     assert comp1["model"].tolist() == comp2["model"].tolist()
 
@@ -93,10 +97,31 @@ def test_baseline_vs_optimized_comparison_deltas(small_dataset):
     assert len(summary) == 2
     for _, row in summary.iterrows():
         expected_abs = row["optimized_f1"] - row["baseline_f1"]
-        expected_rel = (expected_abs / row["baseline_f1"] * 100.0) if row["baseline_f1"] > 0 else 0.0
+        expected_rel = (
+            expected_abs / abs(row["baseline_f1"]) * 100.0
+            if row["baseline_f1"] != 0
+            else np.nan
+        )
         assert pytest.approx(expected_abs, abs=1e-12) == row["f1_abs_delta"]
-        assert pytest.approx(expected_rel, abs=1e-9) == row["f1_rel_pct"]
+        if np.isnan(expected_rel):
+            assert np.isnan(row["f1_rel_pct"])
+        else:
+            assert pytest.approx(expected_rel, abs=1e-9) == row["f1_rel_pct"]
         assert row["optimization_time_sec"] >= 0.0
+
+    base_results["Logistic Regression"].metrics["precision"] = 0.0
+    with_zero_baseline = compare_baseline_and_optimized(base_results, opt_results)
+    lr_row = with_zero_baseline.loc[
+        with_zero_baseline["model"] == "Logistic Regression"
+    ].iloc[0]
+    assert np.isnan(lr_row["precision_rel_pct"])
+
+    opt_results["Logistic Regression"].X_test = (
+        opt_results["Logistic Regression"].X_test.copy()
+    )
+    opt_results["Logistic Regression"].X_test.iloc[0, 0] += 1
+    with pytest.raises(ValueError, match="Test split mismatch"):
+        compare_baseline_and_optimized(base_results, opt_results)
 
 
 def test_save_and_load_optimized_model_isolated_from_baseline(small_dataset, tmp_path):
@@ -119,6 +144,7 @@ def test_save_and_load_optimized_model_isolated_from_baseline(small_dataset, tmp
     assert metadata["selected_model"] == best_name
     assert metadata["best_params"] == best_opt.best_params
     assert pytest.approx(metadata["best_cv_f1"], abs=1e-12) == best_opt.best_cv_score
+    assert metadata["cv_metrics"] == best_opt.cv_metrics
 
 
 def test_missing_and_corrupted_artifact_handling(tmp_path):

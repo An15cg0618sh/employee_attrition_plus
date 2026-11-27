@@ -2,7 +2,9 @@ from pathlib import Path
 import base64
 import html
 
+import joblib
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 import plotly.express as px
 import streamlit as st
@@ -13,9 +15,14 @@ from sklearn.metrics import (
 )
 
 from src.attrition import (
+    compare_baseline_and_optimized,
     clean_dataset,
+    get_candidate_models,
+    get_hyperparameter_search_spaces,
     get_permutation_importance,
     load_dataset,
+    optimize_models,
+    save_optimized_model,
     threshold_metrics,
     train_and_compare,
     validate_dataset_frame,
@@ -48,12 +55,28 @@ def cached_training(dataframe):
     return train_and_compare(dataframe)
 
 @st.cache_data(show_spinner=False)
-def cached_global_shap(_pipeline, dataframe, max_samples=150, random_state=42):
+def cached_global_shap(model_cache_key, _pipeline, dataframe, max_samples=150, random_state=42):
     """Cache SHAP global calculations so reruns remain instant and responsive."""
     return compute_global_shap_explanations(
         _pipeline, dataframe, background_df=dataframe,
         max_samples=max_samples, random_state=random_state
     )
+
+def format_metric_delta(absolute_delta, relative_delta):
+    if pd.isna(absolute_delta):
+        return "N/A"
+    if absolute_delta > 0:
+        indicator = "↑"
+    elif absolute_delta < 0:
+        indicator = "↓"
+    else:
+        indicator = "→"
+    relative = (
+        f"{relative_delta:+.1f}%"
+        if pd.notna(relative_delta)
+        else "relative n/a"
+    )
+    return f"{indicator} {absolute_delta:+.3f} ({relative})"
 
 st.title("Workforce Insights")
 st.caption("Employee Attrition Prediction & Responsible Workforce Analytics with SHAP Explainable AI")
@@ -78,6 +101,15 @@ except (pd.errors.EmptyDataError, pd.errors.ParserError, UnicodeDecodeError, Val
 # Deduplicate before analytics. The cleaned frame is the shared workforce source
 # of truth for all aggregate counts, charts, and CSV exports.
 cleaned_data, cleaning_report = clean_dataset(data)
+data_fingerprint = joblib.hash(cleaned_data)
+if st.session_state.get("m25_data_fingerprint") != data_fingerprint:
+    st.session_state["m25_data_fingerprint"] = data_fingerprint
+    st.session_state["m25_optimization_results"] = {}
+    st.session_state["m25_optimization_failures"] = {}
+    st.session_state["m25_optimization_comparison"] = pd.DataFrame()
+    st.session_state["m25_optimization_status"] = ""
+    st.session_state["m25_optimized_artifacts"] = {}
+    st.session_state["m25_optimization_run_version"] = 0
 
 # Sidebar filters affect only the aggregate workforce analytics section.
 st.sidebar.divider()
@@ -164,6 +196,249 @@ with right:
     st.dataframe(comparison.style.format({
         col: "{:.3f}" for col in comparison.columns if col != "model"
     }), width="stretch", hide_index=True)
+
+# ---------------------------------------------------------------------------
+# Milestone 2.5: User-triggered, isolated optimization workflow
+# ---------------------------------------------------------------------------
+st.divider()
+st.header("Model Comparison & Performance Evaluation")
+st.info(
+    "Optimization runs only when you submit this form. It uses at most 6 "
+    "randomized candidates per selected model, 3 stratified training folds, "
+    "random state 42, and one job. All preprocessing is fitted within each "
+    "training fold. The shared held-out test split is used only for final "
+    "evaluation and is never used to select parameters."
+)
+with st.form("m25_optimization_form"):
+    optimization_choice = st.selectbox(
+        "Models to optimize",
+        ["Logistic Regression", "Random Forest", "Both models"],
+        key="m25_optimization_model_choice",
+    )
+    optimization_iterations = st.slider(
+        "Randomized search candidates per model",
+        min_value=1,
+        max_value=6,
+        value=6,
+        key="m25_optimization_n_iter",
+        help="Hard-capped at 6 candidates per model; each candidate uses 3 CV folds.",
+    )
+    run_optimization = st.form_submit_button("Run bounded optimization")
+
+if run_optimization:
+    all_candidates = get_candidate_models()
+    all_search_spaces = get_hyperparameter_search_spaces()
+    selected_names = (
+        list(all_candidates)
+        if optimization_choice == "Both models"
+        else [optimization_choice]
+    )
+    try:
+        with st.spinner("Running the requested bounded optimization..."):
+            optimized_results, _, _, optimization_failures = optimize_models(
+                data,
+                random_state=42,
+                n_iter=int(optimization_iterations),
+                n_jobs=1,
+                candidate_models={
+                    name: all_candidates[name] for name in selected_names
+                },
+                search_spaces={
+                    name: all_search_spaces[name] for name in selected_names
+                },
+            )
+            if not optimized_results:
+                st.session_state["m25_optimization_failures"] = optimization_failures
+                st.session_state["m25_optimization_status"] = (
+                    "No selected model completed optimization. Existing successful "
+                    "results, if any, have been retained."
+                )
+            else:
+                optimized_comparison = compare_baseline_and_optimized(
+                    {name: results[name] for name in optimized_results},
+                    optimized_results,
+                )
+                best_optimized_name = max(
+                    optimized_results,
+                    key=lambda name: optimized_results[name].best_cv_score,
+                )
+                model_path, report_path = save_optimized_model(
+                    optimized_results[best_optimized_name],
+                    cleaning_report,
+                )
+                st.session_state["m25_optimization_results"] = optimized_results
+                st.session_state["m25_optimization_failures"] = optimization_failures
+                st.session_state["m25_optimization_comparison"] = optimized_comparison
+                st.session_state["m25_optimized_artifacts"] = {
+                    "model": str(model_path),
+                    "report": str(report_path),
+                }
+                st.session_state["m25_optimization_run_version"] = (
+                    st.session_state.get("m25_optimization_run_version", 0) + 1
+                )
+                st.session_state["m25_optimization_status"] = (
+                    f"Optimization completed. Saved the CV-F1-selected model "
+                    f"({best_optimized_name}) to the separate optimized artifacts."
+                )
+    except Exception as exc:
+        st.session_state["m25_optimization_status"] = (
+            f"The latest optimization run failed: {exc}"
+        )
+        st.error(f"Could not complete optimization: {exc}")
+
+optimization_status = st.session_state.get("m25_optimization_status", "")
+if optimization_status:
+    st.caption(optimization_status)
+    if "failed" in optimization_status.lower() or "no selected model" in optimization_status.lower():
+        st.warning(optimization_status)
+    saved_artifacts = st.session_state.get("m25_optimized_artifacts", {})
+    if saved_artifacts:
+        st.caption(
+            f"Optimized artifacts: `{saved_artifacts['model']}` and "
+            f"`{saved_artifacts['report']}`. Baseline artifacts are not modified."
+        )
+
+optimization_failures = st.session_state.get("m25_optimization_failures", {})
+for failed_name, failure_message in optimization_failures.items():
+    st.warning(f"{failed_name} optimization was not available: {failure_message}")
+
+optimized_results = st.session_state.get("m25_optimization_results", {})
+optimized_comparison = st.session_state.get("m25_optimization_comparison", pd.DataFrame())
+if optimized_results and not optimized_comparison.empty:
+    st.subheader("Held-out test comparison")
+    st.caption(
+        "Baseline and optimized values use the exact same deterministic held-out "
+        "records. CV values come from the training split only; positive/negative "
+        "arrows indicate numerical change, not desirability or fairness."
+    )
+    metric_labels = {
+        "accuracy": "Accuracy",
+        "precision": "Precision",
+        "recall": "Recall",
+        "f1": "F1",
+        "roc_auc": "ROC-AUC",
+        "pr_auc": "PR-AUC",
+        "cv_f1": "CV F1 mean",
+        "cv_roc_auc": "CV ROC-AUC mean",
+    }
+    comparison_rows = []
+    for _, comparison_row in optimized_comparison.iterrows():
+        display_row = {"Model": comparison_row["model"]}
+        for metric, label in metric_labels.items():
+            display_row[f"{label} · baseline"] = comparison_row[f"baseline_{metric}"]
+            display_row[f"{label} · optimized"] = comparison_row[f"optimized_{metric}"]
+            display_row[f"{label} · change"] = format_metric_delta(
+                comparison_row[f"{metric}_abs_delta"],
+                comparison_row[f"{metric}_rel_pct"],
+            )
+        display_row["CV F1 std · baseline"] = comparison_row["baseline_cv_f1_std"]
+        display_row["CV F1 std · optimized"] = comparison_row["optimized_cv_f1_std"]
+        display_row["Baseline train seconds"] = comparison_row["baseline_train_time_sec"]
+        display_row["Optimization seconds"] = comparison_row["optimized_optimization_time_sec"]
+        display_row["Baseline prediction seconds"] = comparison_row["baseline_predict_time_sec"]
+        display_row["Optimized prediction seconds"] = comparison_row["optimized_predict_time_sec"]
+        comparison_rows.append(display_row)
+    st.dataframe(
+        pd.DataFrame(comparison_rows).style.format(
+            {
+                column: "{:.3f}"
+                for column in pd.DataFrame(comparison_rows).columns
+                if column != "Model" and "change" not in column
+            }
+        ),
+        width="stretch",
+        hide_index=True,
+    )
+
+    chart_columns = st.columns(2)
+    with chart_columns[0]:
+        test_metric_columns = [
+            "baseline_accuracy", "optimized_accuracy",
+            "baseline_precision", "optimized_precision",
+            "baseline_recall", "optimized_recall",
+            "baseline_f1", "optimized_f1",
+            "baseline_roc_auc", "optimized_roc_auc",
+            "baseline_pr_auc", "optimized_pr_auc",
+        ]
+        test_chart = optimized_comparison.melt(
+            id_vars=["model"],
+            value_vars=test_metric_columns,
+            var_name="version_metric",
+            value_name="score",
+        )
+        test_chart["Version"] = test_chart["version_metric"].str.startswith(
+            "optimized_"
+        ).map({True: "Optimized", False: "Baseline"})
+        test_chart["Metric"] = (
+            test_chart["version_metric"]
+            .str.replace("baseline_", "", regex=False)
+            .str.replace("optimized_", "", regex=False)
+            .str.replace("_", " ")
+            .str.upper()
+        )
+        fig = px.bar(
+            test_chart,
+            x="Metric",
+            y="score",
+            color="Version",
+            barmode="group",
+            facet_col="model",
+            title="Baseline vs. optimized held-out metrics",
+        )
+        st.plotly_chart(fig, width="stretch")
+    with chart_columns[1]:
+        cv_chart = optimized_comparison.melt(
+            id_vars=["model"],
+            value_vars=[
+                "baseline_cv_f1", "optimized_cv_f1",
+                "baseline_cv_roc_auc", "optimized_cv_roc_auc",
+            ],
+            var_name="version_metric",
+            value_name="score",
+        )
+        cv_chart["Version"] = cv_chart["version_metric"].str.startswith(
+            "optimized_"
+        ).map({True: "Optimized", False: "Baseline"})
+        cv_chart["Metric"] = cv_chart["version_metric"].str.contains(
+            "roc_auc"
+        ).map({True: "CV ROC-AUC mean", False: "CV F1 mean"})
+        fig = px.bar(
+            cv_chart,
+            x="Metric",
+            y="score",
+            color="Version",
+            barmode="group",
+            facet_col="model",
+            title="Training-only cross-validation means",
+        )
+        st.plotly_chart(fig, width="stretch")
+        st.caption(
+            "CV F1 standard deviations are reported in the comparison table. "
+            "The held-out test set did not participate in CV or parameter selection."
+        )
+
+    best_optimized_name = max(
+        optimized_results,
+        key=lambda name: optimized_results[name].best_cv_score,
+    )
+    best_optimized = optimized_results[best_optimized_name]
+    st.subheader("Best cross-validated optimized model")
+    summary_columns = st.columns(4)
+    summary_columns[0].metric("Model", best_optimized_name)
+    summary_columns[1].metric("Training CV F1", f"{best_optimized.best_cv_score:.3f}")
+    summary_columns[2].metric("Training CV F1 std", f"{best_optimized.cv_std:.3f}")
+    summary_columns[3].metric(
+        "Held-out F1",
+        f"{best_optimized.metrics['f1']:.3f}",
+        help="Reported for evaluation only; it did not select the model or parameters.",
+    )
+    st.write("Selected hyperparameters")
+    st.json(best_optimized.best_params)
+else:
+    st.caption(
+        "No optimized results are available for this dataset yet. Submit the form "
+        "above to run optimization; dashboard reruns do not launch it automatically."
+    )
 
 # ---------------------------------------------------------------------------
 # Workforce Analytics
@@ -437,7 +712,19 @@ else:
 
 st.subheader("Evaluation and threshold explorer")
 model_name = st.selectbox("Choose a model", list(results.keys()), index=list(results.keys()).index(best_name))
-selected = results[model_name]
+evaluation_versions = ["Baseline"]
+if model_name in optimized_results:
+    evaluation_versions.append("Optimized")
+evaluation_version = st.selectbox(
+    "Model version for evaluation",
+    evaluation_versions,
+    key=f"m25_evaluation_version_{model_name.replace(' ', '_')}",
+)
+selected = (
+    optimized_results[model_name]
+    if evaluation_version == "Optimized"
+    else results[model_name]
+)
 threshold = st.slider(
     "Decision threshold for the demonstration metrics",
     min_value=0.10, max_value=0.90, value=0.50, step=0.05,
@@ -517,7 +804,19 @@ shap_model_name = st.selectbox(
     key="shap_global_model_selector",
     help="Switch between Random Forest (TreeExplainer) and Logistic Regression (LinearExplainer)."
 )
-shap_selected = results[shap_model_name]
+shap_versions = ["Baseline"]
+if shap_model_name in optimized_results:
+    shap_versions.append("Optimized")
+shap_version = st.selectbox(
+    "SHAP model version",
+    shap_versions,
+    key=f"m25_shap_global_version_{shap_model_name.replace(' ', '_')}",
+)
+shap_selected = (
+    optimized_results[shap_model_name]
+    if shap_version == "Optimized"
+    else results[shap_model_name]
+)
 
 # Check that test data exists
 if shap_selected.X_test is None or len(shap_selected.X_test) == 0:
@@ -525,8 +824,17 @@ if shap_selected.X_test is None or len(shap_selected.X_test) == 0:
 else:
     with st.spinner(f"Computing SHAP values for {shap_model_name} (cached)..."):
         try:
+            shap_cache_key = (
+                f"optimized:{data_fingerprint}:"
+                f"{st.session_state['m25_optimization_run_version']}:{shap_model_name}"
+                if shap_version == "Optimized"
+                else f"baseline:{data_fingerprint}:{shap_model_name}"
+            )
             shap_result: ShapExplanationResult = cached_global_shap(
-                shap_selected.pipeline, shap_selected.X_test, max_samples=150
+                shap_cache_key,
+                shap_selected.pipeline,
+                shap_selected.X_test,
+                max_samples=150,
             )
         except Exception as exc:
             st.error(f"Could not compute SHAP explanations for {shap_model_name}: {exc}")
@@ -621,7 +929,19 @@ local_model_name = st.selectbox(
     index=list(results.keys()).index(shap_model_name),
     key="shap_local_model_selector",
 )
-local_selected = results[local_model_name]
+local_versions = ["Baseline"]
+if local_model_name in optimized_results:
+    local_versions.append("Optimized")
+local_version = st.selectbox(
+    "Individual explanation model version",
+    local_versions,
+    key=f"m25_shap_local_version_{local_model_name.replace(' ', '_')}",
+)
+local_selected = (
+    optimized_results[local_model_name]
+    if local_version == "Optimized"
+    else results[local_model_name]
+)
 X_pool = local_selected.X_test
 
 if X_pool is None or len(X_pool) == 0:

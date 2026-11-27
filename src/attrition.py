@@ -321,11 +321,11 @@ def optimize_models(
                 estimator=pipeline,
                 param_distributions=param_distributions,
                 n_iter=effective_n_iter,
-                scoring="f1",
+                scoring={"f1": "f1", "roc_auc": "roc_auc"},
                 cv=cv,
                 random_state=random_state,
                 n_jobs=1,
-                refit=True,
+                refit="f1",
                 error_score=np.nan,
             )
 
@@ -335,15 +335,21 @@ def optimize_models(
 
             best_pipeline = search.best_estimator_
             best_idx = int(search.best_index_)
-            cv_std = float(search.cv_results_["std_test_score"][best_idx])
+            cv_std = float(search.cv_results_["std_test_f1"][best_idx])
             best_cv_score = float(search.best_score_)
+            cv_roc_auc_mean = float(search.cv_results_["mean_test_roc_auc"][best_idx])
 
             t1 = time.perf_counter()
             probabilities = best_pipeline.predict_proba(X_test)[:, 1]
             predict_time_sec = float(time.perf_counter() - t1)
 
             metrics, predictions = calculate_metrics(y_test, probabilities, 0.5)
-            if not _has_valid_metrics(metrics) or not np.isfinite(best_cv_score):
+            if (
+                not _has_valid_metrics(metrics)
+                or not np.isfinite(best_cv_score)
+                or not np.isfinite(cv_std)
+                or not np.isfinite(cv_roc_auc_mean)
+            ):
                 failed_models[name] = "Optimization produced non-finite metrics."
                 continue
 
@@ -353,6 +359,7 @@ def optimize_models(
             cv_metrics = {
                 "cv_f1_mean": best_cv_score,
                 "cv_f1_std": cv_std,
+                "cv_roc_auc_mean": cv_roc_auc_mean,
             }
 
             opt_results[name] = OptimizationResult(
@@ -376,6 +383,7 @@ def optimize_models(
                 **metrics,
                 "best_cv_f1": best_cv_score,
                 "cv_f1_std": cv_std,
+                "cv_roc_auc_mean": cv_roc_auc_mean,
                 "optimization_time_sec": opt_time_sec,
                 "predict_time_sec": predict_time_sec,
                 "n_iter": effective_n_iter,
@@ -407,25 +415,46 @@ def compare_baseline_and_optimized(
         if name not in baseline_results:
             continue
         base_res = baseline_results[name]
-        if not base_res.y_test.index.equals(opt_res.y_test.index):
+        if not base_res.X_test.equals(opt_res.X_test) or not base_res.y_test.equals(opt_res.y_test):
             raise ValueError(f"Test split mismatch between baseline and optimized '{name}'.")
 
         row: dict[str, Any] = {
             "model": name,
-            "baseline_cv_f1": float(base_res.cv_metrics.get("cv_f1_mean", np.nan)),
-            "optimized_cv_f1": float(opt_res.best_cv_score),
-            "cv_f1_abs_delta": float(opt_res.best_cv_score - base_res.cv_metrics.get("cv_f1_mean", np.nan)),
         }
-        for key in metric_keys:
-            base_val = float(base_res.metrics[key])
-            opt_val = float(opt_res.metrics[key])
+        metric_values = {
+            **{
+                key: (float(base_res.metrics[key]), float(opt_res.metrics[key]))
+                for key in metric_keys
+            },
+            "cv_f1": (
+                float(base_res.cv_metrics.get("cv_f1_mean", np.nan)),
+                float(opt_res.cv_metrics.get("cv_f1_mean", opt_res.best_cv_score)),
+            ),
+            "cv_roc_auc": (
+                float(base_res.cv_metrics.get("cv_roc_auc_mean", np.nan)),
+                float(opt_res.cv_metrics.get("cv_roc_auc_mean", np.nan)),
+            ),
+        }
+        row["baseline_cv_f1_std"] = float(
+            base_res.cv_metrics.get("cv_f1_std", np.nan)
+        )
+        row["optimized_cv_f1_std"] = float(opt_res.cv_std)
+        for key, (base_val, opt_val) in metric_values.items():
             abs_delta = opt_val - base_val
-            rel_pct = (abs_delta / base_val * 100.0) if base_val > 0 else 0.0
+            rel_pct = (
+                abs_delta / abs(base_val) * 100.0
+                if np.isfinite(base_val) and base_val != 0
+                else np.nan
+            )
             row[f"baseline_{key}"] = base_val
             row[f"optimized_{key}"] = opt_val
             row[f"{key}_abs_delta"] = abs_delta
             row[f"{key}_rel_pct"] = rel_pct
 
+        row["baseline_train_time_sec"] = float(base_res.train_time_sec)
+        row["optimized_optimization_time_sec"] = float(opt_res.optimization_time_sec)
+        row["baseline_predict_time_sec"] = float(base_res.predict_time_sec)
+        row["optimized_predict_time_sec"] = float(opt_res.predict_time_sec)
         row["optimization_time_sec"] = float(opt_res.optimization_time_sec)
         row["best_params"] = json.dumps(opt_res.best_params, sort_keys=True)
         rows.append(row)
@@ -499,6 +528,7 @@ def save_optimized_model(
         "optimization_time_sec": result.optimization_time_sec,
         "predict_time_sec": result.predict_time_sec,
         "metrics": result.metrics,
+        "cv_metrics": result.cv_metrics,
         "data_quality": cleaning_report,
     }
     report_path.write_text(json.dumps(metadata, indent=2), encoding="utf-8")
