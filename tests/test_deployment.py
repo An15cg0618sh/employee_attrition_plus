@@ -85,3 +85,35 @@ def test_dockerfile_does_not_require_untracked_artifacts():
     assert "streamlit" in dockerfile
     assert "run" in dockerfile
     assert "app.py" in dockerfile
+
+
+def test_python_and_deployment_handoff_files_exist():
+    assert (ROOT / ".python-version").read_text(encoding="utf-8").strip() == "3.12"
+    assert (ROOT / "DEPLOYMENT.md").exists()
+    assert "Streamlit" in (ROOT / "DEPLOYMENT.md").read_text(encoding="utf-8")
+
+
+def test_consolidated_documentation_files_exist():
+    docs = ROOT / "docs"
+    for filename in (
+        "PRD.md",
+        "architecture.md",
+        "design.md",
+        "memory.md",
+        "rule.md",
+        "task.md",
+    ):
+        assert (docs / filename).exists()
+
+
+def test_readme_documentation_links_resolve():
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    for relative in (
+        "./docs/PRD.md",
+        "./docs/architecture.md",
+        "./docs/design.md",
+        "./docs/memory.md",
+        "./docs/rule.md",
+        "./docs/task.md",
+    ):
+        assert relative in readme

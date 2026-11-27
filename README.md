@@ -100,6 +100,18 @@ The supplied dataset is `data/employee_data.csv`. It contains 11,582 raw rows. E
 python -m streamlit run app.py
 ```
 
+Production-mode startup on Windows:
+
+```powershell
+$env:APP_ENV="production"
+$env:LOG_LEVEL="INFO"
+$env:DATA_PATH="data/employee_data.csv"
+$env:ARTIFACT_DIR="artifacts"
+$env:MONITORING_DIR="artifacts/monitoring"
+$env:ALLOW_ARTIFACT_WRITES="true"
+.\start_streamlit.ps1
+```
+
 Open the local URL printed by Streamlit, normally `http://localhost:8501`.
 
 ## 10. Model Training Instructions

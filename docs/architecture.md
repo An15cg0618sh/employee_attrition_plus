@@ -83,3 +83,10 @@ docker run --rm -p 8501:8501 workforce-insights:m2.7
 ```
 
 Render and Procfile examples are included at the repository root. Docker availability and a public provider deployment must be verified independently of local Streamlit startup.
+
+## Hosting Handoff
+
+- GitHub: use as the source-control and provider trigger; never commit `.env` or secrets.
+- Streamlit Community Cloud: deploy `app.py` with `requirements.txt`; persistent monitoring storage is not guaranteed.
+- Render/Fly/other container platforms: use the Dockerfile, mount persistent storage when monitoring history durability is required, and configure health checks on `/_stcore/health`.
+- Vercel: Vercel is primarily serverless/static and is not a direct fit for this long-running Streamlit process. Use a Streamlit-capable host unless the application is redesigned behind separate serverless APIs.
