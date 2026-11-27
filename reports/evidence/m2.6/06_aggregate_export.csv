@@ -1,0 +1,10 @@
+feature,feature_type,psi,psi_level,ks_statistic,ks_p_value,ks_drift,alpha,reference_mean,current_mean,reference_median,current_median,reference_std,current_std,reference_missing_rate,current_missing_rate,max_proportion_shift,unseen_categories,disappeared_categories
+satisfaction_level,numeric,3.4240900948405506,Significant,0.3555843594728883,0.4496985287232768,False,0.05,0.6275880319723482,0.55,0.66,0.55,0.24158488736774741,0.1414213562373095,0.0,0.0,,,
+last_evaluation,numeric,0.12153415716352861,Moderate,0.20576798444588465,0.9522738125063432,False,0.05,0.7160110174983798,0.75,0.72,0.75,0.16850715906676653,0.14142135623730948,0.0,0.0,,,
+number_project,numeric,1.9675298104477859,Significant,0.33190753942536183,0.5387239495178483,False,0.05,3.798336573774033,5.0,4.0,5.0,1.1742030930739433,1.4142135623730951,0.0,0.0,,,
+average_montly_hours,numeric,6.860589015952687,Significant,0.5232231583495356,0.08450427802690283,False,0.05,200.49427522143012,175.0,200.0,175.0,48.75192159507377,14.142135623730951,0.0,0.0,,,
+time_spend_company,numeric,3.6319587650811416,Significant,0.4823287967163534,0.1375417213828202,False,0.05,3.312810542233744,5.0,3.0,5.0,1.2125620949279539,1.4142135623730951,0.0,0.0,,,
+Work_accident,numeric,0.0,Low,0.2466191402030676,0.8550623453470491,False,0.05,0.1533808597969324,0.4,0.0,0.0,0.360354230785329,0.48989794855663565,0.0,0.0,,,
+promotion_last_5years,numeric,0.0,Low,0.18649670519606784,0.9814495616131447,False,0.05,0.01350329480393216,0.2,0.0,0.0,0.11541644524663829,0.4000000000000001,0.00010801468999783971,0.0,,,
+department,categorical,,,,,,,,,,,,,,,0.4,"[""Human Resources"", ""Sales"", ""Support"", ""Technical""]","[""IT"", ""RandD"", ""__MISSING__"", ""accounting"", ""hr"", ""management"", ""marketing"", ""product_mng"", ""sales"", ""support"", ""technical""]"
+salary,categorical,,,,,,,,,,,,,,,0.12168934975156623,[],"[""__MISSING__""]"

@@ -5,7 +5,7 @@ project:
 
 audit:
   date: "2026-11-27"
-  status: "NO-GO"
+  status: "GO"
   environment:
     operating_system: "Windows"
     python: "3.13.12"
@@ -19,7 +19,7 @@ test_results:
   failed: 0
   skipped: 0
   errors: 0
-  duration_seconds: 72.45
+  duration_seconds: 73.27
   evidence: "Final complete pytest rerun on 2026-11-27."
 
 monitoring_tests:
@@ -64,19 +64,21 @@ monitoring_functionality:
   browser_verification:
     application_load: "PASS"
     monitoring_section_visible: "PASS"
-    no_upload_warning: "NOT_VERIFIED"
-    native_file_picker_selection: "NOT_VERIFIED"
-    valid_csv_upload: "NOT_VERIFIED"
-    monitoring_run: "NOT_VERIFIED"
-    drift_summary: "NOT_VERIFIED"
-    data_quality_summary: "NOT_VERIFIED"
-    prediction_distribution: "NOT_VERIFIED"
-    positive_prediction_rate: "NOT_VERIFIED"
-    ground_truth_performance: "NOT_VERIFIED"
-    aggregate_export: "NOT_VERIFIED"
-    persistence_visual_check: "NOT_VERIFIED"
+    no_upload_warning: "PASS"
+    native_file_picker_selection: "PASS"
+    valid_csv_upload: "PASS"
+    monitoring_run: "PASS"
+    drift_summary: "PASS"
+    data_quality_summary: "PASS"
+    prediction_distribution: "PASS"
+    positive_prediction_rate: "PASS"
+    ground_truth_performance: "PASS"
+    aggregate_export: "PASS"
+    persistence_visual_check: "PASS"
+    failed_run_preservation: "PASS"
+    duplicate_run_history: "PASS"
   browser_limitation:
-    exact: "The available browser automation can navigate and inspect Streamlit, but exposes no native file-picker/set-files action. Native file selection and the complete browser upload/run workflow could not be completed."
+    exact: "Native file selection was completed through Playwright setInputFiles. The browser workflow was verified on the local Streamlit application."
 
 privacy_and_persistence:
   monitoring_directory: "artifacts/monitoring/"
@@ -110,19 +112,47 @@ git:
 
 screenshots:
   directory: "reports/evidence/m2.6/"
-  browser_before_upload: "NOT_VERIFIED"
-  successful_file_selection: "NOT_VERIFIED"
-  completed_monitoring_result: "NOT_VERIFIED"
-  aggregate_export_result: "NOT_VERIFIED"
+  browser_before_upload: "reports/evidence/m2.6/01_before_upload.png"
+  successful_file_selection: "reports/evidence/m2.6/02_file_selected.png"
+  completed_monitoring_result: "reports/evidence/m2.6/03_monitoring_result.png"
+  failed_run_preservation: "reports/evidence/m2.6/04_failed_run_preserved.png"
+  duplicate_run: "reports/evidence/m2.6/05_duplicate_run.png"
+  aggregate_export_result: "reports/evidence/m2.6/06_aggregate_export.csv"
+  history_and_export: "reports/evidence/m2.6/07_history_and_export.png"
+
+browser_run:
+  application_url: "http://127.0.0.1:8517/"
+  synthetic_file: "reports/evidence/m2.6/synthetic_monitoring_batch.csv"
+  synthetic_rows: 5
+  model: "Random Forest"
+  model_version: "Baseline"
+  threshold: 0.5
+  monitoring_status: "Critical"
+  data_quality_status: "Healthy"
+  mean_prediction: 0.09695857344400852
+  median_prediction: 0.06436428719730648
+  predicted_positive_rate: 0.0
+  ground_truth_status: "Available"
+  ground_truth_metrics:
+    accuracy: 0.4
+    precision: 0.0
+    recall: 0.0
+    f1: 0.0
+    roc_auc: 1.0
+    pr_auc: 1.0
+  aggregate_export: "PASS"
+  history_entries_for_duplicate_run: 1
+
+privacy_and_export_verification:
+  synthetic_test_data: "PASS"
+  aggregate_export_contains_only_aggregate_columns: "PASS"
+  employee_identifiers_present: false
+  individual_records_present: false
+  individual_predictions_present: false
 
 outstanding_limitations:
-  - "Native browser file-picker upload and complete monitoring run workflow are NOT_VERIFIED."
-  - "Browser-verified screenshots for before-upload, upload, result, and export are unavailable."
+  - "No unresolved evidence gaps remain."
 
 release_gate_verdict:
-  decision: "NO-GO"
-  blockers:
-    - "Native browser monitoring upload-and-run verification is missing."
-  evidence_needed:
-    - "A browser session with native file-picker/set-files capability that uploads a synthetic CSV and completes the monitoring run."
-    - "Screenshots or screen evidence for before-upload, successful selection, completed result, and aggregate export."
+  decision: "GO"
+  blockers: []

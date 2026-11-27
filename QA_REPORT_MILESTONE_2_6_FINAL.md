@@ -12,6 +12,13 @@
 - Ruff: **all checks passed**.
 - Python compilation: **passed**.
 - Streamlit health: **HTTP 200** on port 8515.
+- Native browser monitoring upload-and-run: **PASS** on port 8517.
+- Synthetic monitoring batch: 5 rows, no personal identifiers.
+- Browser result: Critical drift status, Healthy data quality, mean prediction 0.097, positive rate 0.0%.
+- Delayed performance: Available with 5 labeled rows.
+- Aggregate export: verified and contains feature-level aggregate columns only.
+- Failed run: preserved the last successful report.
+- Duplicate run: history remained deduplicated to one entry.
 - Baseline and optimized model artifacts were not overwritten.
 
 ## 2. Implementation Verification
@@ -72,7 +79,7 @@ No existing test was deleted, skipped, renamed, or weakened.
 ### pytest
 
 ```text
-83 passed in 72.60s
+83 passed in 73.27s
 ```
 
 ### Ruff
